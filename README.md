@@ -1,48 +1,129 @@
 # WicScan Risk Manager
 
-WicScan Risk Manager es una plataforma para el análisis, gestión y evaluación de riesgos de seguridad en aplicaciones y repositorios de código. Su enfoque principal es **llevar los hallazgos técnicos (vulnerabilidades) a riesgos de negocio**, para que las organizaciones puedan entender el impacto real de las brechas de seguridad. Utiliza inteligencia artificial (modelos locales como Ollama/Llama3.2 o APIs de terceros como Anthropic y Gemini) junto con herramientas de análisis estático y dinámico de código para generar reportes detallados y matrices de riesgo alineadas con **ISO 31000**.
+Plataforma de gestión de riesgos de seguridad en aplicaciones. Correlaciona hallazgos técnicos (SAST/DAST/IA) con impacto de negocio y genera un flujo de riesgo alineado con ISO 31000, en 5 fases: Contextualización, Identificación, Análisis, Evaluación y Tratamiento.
 
-## 🚀 Características Principales
+Stack: FastAPI + PostgreSQL + Redis/Celery (backend), Next.js (frontend), microservicios separados para orquestación de escáneres (`scanner-manager`) y proveedores de IA (`ai-gateway`). Todo corre en Docker Compose.
 
-- **Gestión de Proyectos y Activos**: Organiza repositorios, aplicaciones y fuentes de código por proyecto.
-- **Fase 1 — Contextualización**: **Análisis de Impacto en el Negocio (BIA)** por proceso, con criticidad, dependencia de ingresos y cálculo de RTO/RPO/MTPD.
-- **Fase 2 — Identificación**: Análisis multi-escáner automático con **SonarQube** (SAST), **OWASP ZAP** (DAST) y **AI Review** (revisión asistida por IA).
-- **Fase 3 — Análisis**: Consolidación inteligente de hallazgos en escenarios de riesgo, evaluación de **probabilidad e impacto** (operacional, financiero, normativo, reputacional) con apoyo de IA.
-- **Fase 4 — Evaluación**: El *AI Gateway* traduce escenarios en riesgos de negocio priorizados, puntuados y clasificados por severidad.
-- **Fase 5 — Tratamiento**: Planes de tratamiento (mitigar / evitar / transferir / aceptar), ciclos de revisión, eventos desencadenantes, indicadores de riesgo por período y reporte final.
-- **Catálogo de Cuestionarios (Admin)**: Gestión versionada de definiciones de cuestionarios con inmutabilidad de versiones publicadas (copy-on-publish).
-- **Soporte Multi-Modelo**: Modelos locales (`Ollama`) para privacidad del código, o modelos en la nube (`Claude`, `Gemini`, `OpenAI`).
-- **Monitoreo de Servicios**: Dashboard en tiempo real del estado de los microservicios y gestión de escáneres conectados.
+## Requisitos
 
-## 🗂️ Proceso ISO 31000 — Fases
+- Docker y Docker Compose
+- `make` (opcional pero recomendado)
 
-```
-Fase 1            Fase 2            Fase 3          Fase 4         Fase 5
-Contextualización → Identificación → Análisis      → Evaluación  → Tratamiento
-(BIA)                (SAST/DAST/IA)   (Escenarios)    (Riesgos IA)  (Plan/Reporte)
+## Puesta en marcha (desarrollo)
+
+```bash
+git clone https://github.com/wiliansyob/wicscan-erm.git
+cd wicscan-erm
+make up
 ```
 
-| Fase | Descripción | Rutas Frontend |
+`make up` copia `.env.example` a `.env` (si no existe) y levanta los contenedores. Al arrancar, el backend ejecuta automáticamente: creación de tablas, migraciones (`alembic upgrade head`), datos iniciales (`seed_auto`) y el catálogo de cuestionarios ISO 31000 (`seed_questionnaire`).
+
+Servicios expuestos:
+
+| Servicio | URL | Credenciales por defecto |
 | :--- | :--- | :--- |
-| **Fase 1** | Análisis de Impacto en el Negocio (BIA) por proceso | `/contexto/bia` |
-| **Fase 2** | Escaneo de activos y fuentes de código | `/activos`, `/scans`, `/identificacion` |
-| **Fase 3** | Consolidación en escenarios, probabilidad e impacto | `/escenarios`, `/probabilidad`, `/impacto` |
-| **Fase 4** | Evaluación de riesgos de negocio con apoyo de IA | `/analisis` |
-| **Fase 5** | Planes de tratamiento, ciclos de revisión y reporte | `/tratamiento`, `/reporte` |
+| Frontend | http://localhost:3000 | — |
+| Backend API Docs | http://localhost:8000/docs | — |
+| Scanner Manager | http://localhost:8001/docs | — |
+| AI Gateway | http://localhost:8002/docs | — |
+| SonarQube | http://localhost:9000 | admin / admin |
 
-## 🏗️ Arquitectura Técnica
+SonarQube tarda 1-2 minutos en arrancar (bootstrap de Elasticsearch). `scanner-manager` genera su token de análisis automáticamente contra `admin`/`admin` la primera vez que lo necesita; cambia esa contraseña en la UI de SonarQube si expones el puerto fuera de tu máquina.
 
-- **Frontend**: Next.js 14, React, TypeScript, TailwindCSS, Radix UI, React Query, Recharts.
-- **Backend**: FastAPI (Python), SQLAlchemy async, PostgreSQL, Redis, Celery. La lógica de dominio se organiza en `app/modules/` (contexto, identification, escenarios, analisis, tratamiento, admin/catalog, assessment/scoring).
-- **Scanner Manager**: Microservicio que orquesta y normaliza los escaneos de SonarQube.
-- **AI Gateway**: Microservicio dedicado a la comunicación estandarizada con proveedores de IA (OpenAI, Anthropic, Gemini, Ollama).
+### IA (opcional)
+
+- Modelos en la nube (Claude, Gemini, OpenAI): añade la API key desde `/settings` en el frontend, o directamente en `.env`.
+- Ollama local (sin coste de API, todo el análisis queda en tu máquina): descomenta el servicio `ollama` en `docker-compose.yml` y luego:
+  ```bash
+  docker compose up -d ollama
+  make ollama-pull
+  ```
+
+## Comandos (`Makefile`)
+
+| Comando | Descripción |
+| :--- | :--- |
+| `make up` | Levanta todos los contenedores en segundo plano |
+| `make down` | Detiene y elimina los contenedores |
+| `make logs` | Sigue los logs de backend, worker, scanner-manager, ai-gateway |
+| `make build` | Reconstruye las imágenes sin caché |
+| `make migrate` | Aplica migraciones de base de datos manualmente |
+| `make seed` | Carga datos de prueba y usuario administrador |
+| `make status` | `docker compose ps` |
+| `make health` | Verifica el estado de las APIs y de SonarQube |
+| `make clean` | Apaga todo y destruye los volúmenes (irreversible) |
+| `make sonar-token` | Genera un token global de análisis para SonarQube |
+| `make backend-shell` | Shell bash en el contenedor del backend |
+| `make test-backend` | Ejecuta la suite de tests del backend (`pytest`) |
+| `make ollama-pull` | Descarga el modelo Llama3.2 en Ollama |
+
+## Despliegue en producción
+
+### 1. Variables de entorno
+
+Copia `.env.example` a `.env` y cambia todos los valores por defecto:
+
+| Variable | Motivo |
+| :--- | :--- |
+| `SECRET_KEY` | Firma los JWT de sesión. Generar con `openssl rand -hex 32` |
+| `POSTGRES_PASSWORD` | Contraseña de la base de datos principal |
+| `REDIS_PASSWORD` | Necesaria si Redis queda accesible fuera de la red interna de Docker |
+| `SONARQUBE_ADMIN_PASSWORD` | Cambiar también en la UI de SonarQube tras el primer arranque |
+| `MOBSF_API_KEY` | Solo si se usa el adaptador MobSF (análisis móvil) |
+
+`.env` ya está en `.gitignore` — nunca lo subas a un repositorio.
+
+### 2. Exposición de servicios
+
+Por defecto el compose publica los puertos de todos los servicios (backend, scanner-manager, ai-gateway, postgres, redis, sonarqube) directamente en el host. En un servidor expuesto a internet:
+
+- Pon un reverse proxy con TLS (Nginx, Caddy o Traefik) delante de `frontend` (3000) y `backend` (8000); expón solo 443/80 al exterior.
+- Quita el mapeo `ports:` de `postgres`, `redis`, `scanner-manager`, `ai-gateway` y `sonarqube` en el compose de producción — solo necesitan verse entre sí dentro de la red `wicscan_net`.
+- Actualiza `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` en el servicio `frontend` para que apunten al dominio público, no a `localhost`.
+
+### 3. Persistencia y backups
+
+Volúmenes con datos: `postgres_data`, `redis_data`, `uploads_data`, `sonarqube_data`, `sonarqube_extensions`, `mobsf_data`. Como mínimo, backup periódico de `postgres_data` (o un `pg_dump` lógico) y de `uploads_data`.
+
+### 4. Recursos
+
+- SonarQube (Elasticsearch embebido) necesita ~2 GB de RAM libres para arrancar de forma estable.
+- El worker de Celery escala horizontalmente: `docker compose up -d --scale worker=3`.
+- Ollama local necesita GPU o RAM dedicada (bloque comentado en `docker-compose.yml`).
+
+### 5. Checklist antes de publicar
+
+```bash
+make build
+make up
+make health
+```
+
+## Arquitectura
+
+- **Frontend**: Next.js 14, TypeScript, TailwindCSS, React Query, Recharts.
+- **Backend**: FastAPI, SQLAlchemy async, PostgreSQL, Redis, Celery. Lógica de dominio en `app/modules/` (contexto, identification, escenarios, analisis, tratamiento, admin/catalog, assessment/scoring).
+- **Scanner Manager**: microservicio que orquesta y normaliza escaneos de SonarQube.
+- **AI Gateway**: microservicio de comunicación estandarizada con proveedores de IA (OpenAI, Anthropic, Gemini, Ollama).
 - **Infraestructura**: Docker Compose, volumen local para uploads (evidencias/reportes).
 
-## 🗄️ Esquema de Base de Datos
+## Fases (ISO 31000)
 
-La aplicación utiliza PostgreSQL. Todas las tablas incluyen `id` (UUID), `created_at` y `updated_at`. La lógica relacional se maneja vía SQLAlchemy.
+| Fase | Descripción | Rutas |
+| :--- | :--- | :--- |
+| 1 — Contextualización | BIA por proceso de negocio | `/contexto/bia` |
+| 2 — Identificación | Escaneo de activos y fuentes de código | `/activos`, `/scans`, `/identificacion` |
+| 3 — Análisis | Escenarios, probabilidad e impacto | `/escenarios`, `/probabilidad`, `/impacto` |
+| 4 — Evaluación | Riesgos de negocio priorizados con IA | `/analisis` |
+| 5 — Tratamiento | Planes de tratamiento, ciclos de revisión, reporte | `/tratamiento`, `/reporte` |
 
-### Gestión de Usuarios y Proyectos
+## Esquema de base de datos
+
+PostgreSQL. Todas las tablas incluyen `id` (UUID), `created_at`, `updated_at`.
+
+<details>
+<summary>Gestión de usuarios y proyectos</summary>
 
 #### `workspaces`
 | Columna | Tipo | Descripción |
@@ -97,7 +178,10 @@ La aplicación utiliza PostgreSQL. Todas las tablas incluyen `id` (UUID), `creat
 | `status` | String | pending, cloning, ready, error |
 | `snapshot_hash` | String | Hash de integridad |
 
-### Escaneos y Hallazgos (Fase 2 — Identificación)
+</details>
+
+<details>
+<summary>Escaneos y hallazgos (Fase 2)</summary>
 
 #### `scan_sessions`
 | Columna | Tipo | Descripción |
@@ -144,7 +228,10 @@ La aplicación utiliza PostgreSQL. Todas las tablas incluyen `id` (UUID), `creat
 | `resolved_count` | Integer | Hallazgos resueltos |
 | `regression_count` | Integer | Regresiones detectadas |
 
-### Fase 1 — Contextualización
+</details>
+
+<details>
+<summary>Contextualización (Fase 1)</summary>
 
 #### `questionnaire_definitions` (Catálogo Admin)
 | Columna | Tipo | Descripción |
@@ -215,7 +302,10 @@ Registro de auditoría inmutable de toda acción sobre definiciones (create, upd
 #### `activo_proceso_links`
 Relación muchos-a-muchos entre activos y procesos de negocio, con peso de dependencia.
 
-### Fase 3 — Escenarios y Análisis
+</details>
+
+<details>
+<summary>Escenarios y análisis (Fase 3)</summary>
 
 #### `escenarios`
 | Columna | Tipo | Descripción |
@@ -234,7 +324,10 @@ Relación muchos-a-muchos entre activos y procesos de negocio, con peso de depen
 #### `escenario_hallazgos`
 Relación muchos-a-muchos entre escenarios y hallazgos técnicos.
 
-### Fase 4 — Evaluación de Riesgos (AI Gateway)
+</details>
+
+<details>
+<summary>Evaluación de riesgos — AI Gateway (Fase 4)</summary>
 
 #### `risk_engine_runs`
 | Columna | Tipo | Descripción |
@@ -274,9 +367,12 @@ Relación muchos-a-muchos entre escenarios y hallazgos técnicos.
 | `status` | String | planned, in_progress, completed, cancelled |
 | `expected_risk_reduction` | Float | Reducción esperada |
 
-*También existe `risk_finding_links` (muchos-a-muchos entre riesgos y hallazgos).*
+También existe `risk_finding_links` (muchos-a-muchos entre riesgos y hallazgos).
 
-### Fase 5 — Monitoreo Continuo
+</details>
+
+<details>
+<summary>Monitoreo continuo (Fase 5)</summary>
 
 #### `trigger_events`
 | Columna | Tipo | Descripción |
@@ -305,117 +401,12 @@ Relación muchos-a-muchos entre escenarios y hallazgos técnicos.
 | `incidents_count` | Integer | Incidentes en el período |
 | `normative_status` | JSON | Estado normativo por regulación |
 
-## ⚙️ Requisitos Previos
+</details>
 
-- [Docker](https://www.docker.com/) y Docker Compose.
-- `make` (opcional, pero fuertemente recomendado).
+## Contribución
 
-## 🛠️ Instalación y Uso
+Issues y pull requests bienvenidos.
 
-1. **Clonar el repositorio:**
-   ```bash
-   git clone https://github.com/tu-usuario/wscan.git
-   cd wscan
-   ```
+## Licencia
 
-2. **Levantar los servicios:**
-   Se copia automáticamente `.env.example` a `.env` si no existe y se construyen los contenedores.
-   ```bash
-   make up
-   ```
-
-   Al arrancar, el backend ejecuta automáticamente:
-   - Creación de tablas (`create_tables`)
-   - Migraciones (`alembic upgrade head`)
-   - Datos iniciales (`seed_auto`)
-   - Catálogo de cuestionarios (`seed_questionnaire` — carga el cuestionario ISO 31000 v1 con 17 preguntas, bloques A–D)
-
-3. **Configurar la IA (Opcional):**
-   Para usar modelos en la nube (Claude, Gemini, OpenAI), añade tu API key desde `/settings` en el frontend o directamente en `.env`.
-
-   Para usar Ollama en local (privacidad total del código, sin coste de API), descomenta el servicio `ollama` en `docker-compose.yml`, levanta de nuevo los contenedores y descarga el modelo por defecto:
-   ```bash
-   docker compose up -d ollama
-   make ollama-pull
-   ```
-
-4. **Acceso a los servicios:**
-   | Servicio | URL | Credenciales por defecto |
-   | :--- | :--- | :--- |
-   | Frontend | http://localhost:3000 | — |
-   | Backend API Docs | http://localhost:8000/docs | — |
-   | Scanner Manager | http://localhost:8001/docs | — |
-   | AI Gateway | http://localhost:8002/docs | — |
-   | SonarQube | http://localhost:9000 | admin / admin |
-
-   > SonarQube tarda 1-2 minutos en arrancar la primera vez (bootstrap de Elasticsearch). `scanner-manager` genera su token de análisis automáticamente contra `admin`/`admin` la primera vez que lo necesita — cambia esa contraseña en la UI de SonarQube si expones el puerto fuera de tu máquina.
-
-## 📖 Comandos Útiles (`Makefile`)
-
-| Comando | Descripción |
-| :--- | :--- |
-| `make up` | Levanta todos los contenedores en segundo plano |
-| `make down` | Detiene y elimina los contenedores |
-| `make logs` | Sigue (tail) los logs de los microservicios principales |
-| `make build` | Reconstruye las imágenes de Docker sin caché |
-| `make migrate` | Aplica migraciones de base de datos manualmente |
-| `make seed` | Carga datos de prueba y usuario administrador |
-| `make status` | Muestra el estado de los contenedores (`docker compose ps`) |
-| `make health` | Verifica el estado de salud de todas las APIs y SonarQube |
-| `make clean` | Apaga todo y destruye los volúmenes. **¡Úsalo con precaución!** |
-| `make sonar-token` | Genera un token global de análisis para SonarQube |
-| `make backend-shell` | Abre una shell bash en el contenedor del backend |
-| `make test-backend` | Ejecuta la suite de tests del backend (`pytest`) |
-| `make ollama-pull` | Descarga el modelo Llama3.2 en Ollama |
-
-## 🚀 Despliegue en Producción
-
-WicScan se despliega como un stack de contenedores Docker Compose. Para una instalación expuesta a internet u otros usuarios (no solo `localhost`), ten en cuenta lo siguiente:
-
-### 1. Variables de entorno
-
-Copia `.env.example` a `.env` y cambia **todos** los valores por defecto antes de desplegar:
-
-| Variable | Por qué cambiarla |
-| :--- | :--- |
-| `SECRET_KEY` | Firma los JWT de sesión. Genera una aleatoria: `openssl rand -hex 32` |
-| `POSTGRES_PASSWORD` | Contraseña de la base de datos principal |
-| `REDIS_PASSWORD` | Si Redis queda accesible fuera de la red interna de Docker |
-| `SONARQUBE_ADMIN_PASSWORD` | Cámbiala en la UI de SonarQube tras el primer arranque y refléjalo aquí |
-| `MOBSF_API_KEY` | Solo si usas el adaptador MobSF (análisis móvil) |
-
-Nunca subas tu `.env` real a un repositorio (ya está en `.gitignore`).
-
-### 2. Exposición de servicios
-
-Por defecto, `docker-compose.yml` publica los puertos de **todos** los servicios (backend, scanner-manager, ai-gateway, postgres, redis, sonarqube...) directamente en el host. En un servidor de producción:
-
-- Coloca un **reverse proxy con TLS** (Nginx, Caddy o Traefik) delante del `frontend` (3000) y el `backend` (8000), y expón solo esos dos puertos (443/80) al exterior.
-- Restringe o elimina el mapeo de puertos (`ports:`) de `postgres`, `redis`, `scanner-manager`, `ai-gateway` y `sonarqube` en el compose de producción — solo necesitan ser alcanzables entre sí dentro de la red `wicscan_net`, no desde fuera del host.
-- Actualiza `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` en el servicio `frontend` para que apunten al dominio público, no a `localhost`.
-
-### 3. Persistencia y backups
-
-Todos los datos viven en volúmenes con nombre (`postgres_data`, `redis_data`, `uploads_data`, `sonarqube_data`, `sonarqube_extensions`, `mobsf_data`). Como mínimo, programa un backup periódico de `postgres_data` (o mejor, de un `pg_dump` lógico) y de `uploads_data`.
-
-### 4. Recursos y escalado
-
-- SonarQube (Elasticsearch embebido) necesita al menos ~2 GB de RAM disponibles para arrancar de forma estable.
-- El `worker` de Celery se puede escalar horizontalmente: `docker compose up -d --scale worker=3`.
-- Si usas Ollama local, resérvale GPU o RAM dedicada (ver bloque comentado del servicio `ollama` en `docker-compose.yml`).
-
-### 5. Checklist rápido antes de publicar
-
-```bash
-make build      # imágenes limpias, sin caché
-make up          # levanta el stack
-make health       # verifica que todos los servicios respondan
-```
-
-## 🤝 Contribución
-
-¡Las contribuciones son bienvenidas! Por favor, abre un *issue* o envía un *pull request* con tus sugerencias o mejoras.
-
-## 📝 Licencia
-
-Este proyecto está bajo la Licencia MIT - mira el archivo [LICENSE](LICENSE) para más detalles.
+MIT — ver [LICENSE](LICENSE).
