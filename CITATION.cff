@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "Si utiliza WicScan Risk Manager, cite este software."
+title: "WicScan Risk Manager"
+type: software
+authors:
+  - family-names: "Canaza Chambi"
+    given-names: "Wilians"
+version: "1.0.0"
+date-released: "2026-07-14"
+url: "https://github.com/wiliansyob/wicscan-erm"
+license: MIT
