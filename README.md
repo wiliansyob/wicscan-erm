@@ -135,18 +135,3 @@ make up
 make health
 ```
 
-## 🏗️ Arquitectura Técnica
-
-- **Frontend**: Next.js 14, TypeScript, TailwindCSS, React Query, Recharts.
-- **Backend**: FastAPI, SQLAlchemy async, PostgreSQL, Redis, Celery. Lógica de dominio en `app/modules/` (contexto, identification, escenarios, analisis, tratamiento, admin/catalog, assessment/scoring).
-- **Scanner Manager**: microservicio que orquesta y normaliza escaneos de SonarQube.
-- **AI Gateway**: microservicio de comunicación estandarizada con proveedores de IA (OpenAI, Anthropic, Gemini, Ollama).
-- **Infraestructura**: Docker Compose, volumen local para uploads (evidencias/reportes).
-
-## 🤝 Contribución
-
-¡Las contribuciones son bienvenidas! Por favor, abre un *issue* o envía un *pull request* con tus sugerencias o mejoras.
-
-## 📝 Licencia
-
-Este proyecto está bajo la Licencia MIT - mira el archivo [LICENSE](LICENSE) para más detalles.
