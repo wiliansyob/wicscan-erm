@@ -1,0 +1,43 @@
+# Web Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# Database
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+alembic==1.14.0
+greenlet==3.1.1
+
+# Auth
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.1
+
+# Validation
+pydantic==2.10.1
+pydantic-settings==2.6.1
+email-validator==2.2.0
+
+# Task Queue
+celery==5.4.0
+celery[redis]==5.4.0
+redis==5.2.0
+
+# HTTP Client
+httpx==0.28.0
+aiohttp==3.11.10
+
+# Excel export
+openpyxl==3.1.5
+
+# Utilities
+python-dotenv==1.0.1
+structlog==24.4.0
+tenacity==9.0.0
+orjson==3.10.12
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.0

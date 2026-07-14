@@ -1,0 +1,46 @@
+# Entornos y secretos
+.env
+*.pem
+*.key
+*.cert
+*.crt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# Node
+node_modules/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+build/
+.swc/
+
+# Mac / Windows
+.DS_Store
+Thumbs.db
+*.bak
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI / Custom
+.claude/
+.gemini/
+.cursor/

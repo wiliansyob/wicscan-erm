@@ -1,0 +1,258 @@
+networks:
+  wicscan_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+  ollama_data:
+  redis_data:
+  uploads_data:
+  mobsf_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
+
+services:
+
+  # ─────────────────────────────────────────
+  # FRONTEND — Next.js CISO Dashboard
+  # ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./app/frontend
+      dockerfile: Dockerfile
+    container_name: wicscan_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}
+      - NEXT_PUBLIC_WS_URL=ws://localhost:${BACKEND_PORT:-8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # BACKEND — FastAPI Risk API
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+    container_name: wicscan_backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://wicscan:${POSTGRES_PASSWORD:-wicscan123}@postgres:5432/wicscan
+      - REDIS_URL=redis://redis:6379/0
+      - SCANNER_MANAGER_URL=http://scanner-manager:8001
+      - AI_GATEWAY_URL=http://ai-gateway:8002
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # CELERY WORKER — Async Scan Processor
+  # ─────────────────────────────────────────
+  worker:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+    container_name: wicscan_worker
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=4 -Q scans
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://wicscan:${POSTGRES_PASSWORD:-wicscan123}@postgres:5432/wicscan
+      - REDIS_URL=redis://redis:6379/0
+      - SCANNER_MANAGER_URL=http://scanner-manager:8001
+      - AI_GATEWAY_URL=http://ai-gateway:8002
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # SCANNER MANAGER — Abstraction Layer
+  # ─────────────────────────────────────────
+  scanner-manager:
+    build:
+      context: ./app/scanner-manager
+      dockerfile: Dockerfile
+    container_name: wicscan_scanner_manager
+    restart: unless-stopped
+    ports:
+      - "${SCANNER_MANAGER_PORT:-8001}:8001"
+    environment:
+      - SONARQUBE_URL=http://sonarqube:9000
+      - SONARQUBE_TOKEN=${SONARQUBE_TOKEN:-}
+      - SONARQUBE_ADMIN_USER=${SONARQUBE_ADMIN_USER:-admin}
+      - SONARQUBE_ADMIN_PASSWORD=${SONARQUBE_ADMIN_PASSWORD:-admin}
+      - MOBSF_URL=http://mobsf:8000
+      - MOBSF_API_KEY=${MOBSF_API_KEY:-mobsf_secret_key}
+      - DATABASE_URL=postgresql+asyncpg://wicscan:${POSTGRES_PASSWORD:-wicscan123}@postgres:5432/wicscan
+      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # SONARQUBE — Static Analysis (SAST)
+  # ─────────────────────────────────────────
+  sonarqube:
+    image: sonarqube:10-community
+    container_name: wicscan_sonarqube
+    restart: unless-stopped
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+    ports:
+      - "${SONARQUBE_PORT:-9000}:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # AI GATEWAY — Multi-Provider AI Service
+  # ─────────────────────────────────────────
+  ai-gateway:
+    build:
+      context: ./app/ai-gateway
+      dockerfile: Dockerfile
+    container_name: wicscan_ai_gateway
+    restart: unless-stopped
+    ports:
+      - "${AI_GATEWAY_PORT:-8002}:8002"
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:${OLLAMA_PORT:-11434}
+      - DATABASE_URL=postgresql+asyncpg://wicscan:${POSTGRES_PASSWORD:-wicscan123}@postgres:5432/wicscan
+      - REDIS_URL=redis://redis:6379/0
+      - MAX_TOKENS=${AI_MAX_TOKENS:-4096}
+      - TEMPERATURE=${AI_TEMPERATURE:-0.1}
+    depends_on:
+      # - ollama
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # POSTGRES — Main Database
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: wicscan_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=wicscan
+      - POSTGRES_USER=wicscan
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-wicscan123}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./app/infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wicscan -d wicscan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wicscan_net
+
+  # ─────────────────────────────────────────
+  # REDIS — Cache + Task Queue
+  # ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: wicscan_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wicscan_net
+
+
+  # ─────────────────────────────────────────
+  # OLLAMA — Local LLM
+  # ─────────────────────────────────────────
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: wicscan_ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${OLLAMA_PORT:-11434}:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - wicscan_net
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         memory: 8G
+  #       limits:
+  #         memory: 8G
+  #   # Descomentar si hay GPU disponible:
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - capabilities: [gpu]
+
+
