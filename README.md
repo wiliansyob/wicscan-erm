@@ -2,6 +2,10 @@
 
 WicScan Risk Manager es una plataforma para el análisis, gestión y evaluación de riesgos de seguridad en aplicaciones y repositorios de código. Su enfoque principal es **llevar los hallazgos técnicos (vulnerabilidades) a riesgos de negocio**, para que las organizaciones puedan entender el impacto real de las brechas de seguridad. Utiliza inteligencia artificial (modelos locales como Ollama/Llama3.2 o APIs de terceros como Anthropic y Gemini) junto con herramientas de análisis estático y dinámico de código para generar reportes detallados y matrices de riesgo alineadas con **ISO 31000**.
 
+| Activos y riesgos | Motores de escaneo | Matriz de riesgo ISO 31000 |
+| :---: | :---: | :---: |
+| ![Dashboard de activos y riesgos](docs/screenshots/dashboard-activos.png) | ![Selección de motores de escaneo](docs/screenshots/scans-motores.png) | ![Matriz de riesgo ISO 31000](docs/screenshots/analisis-matriz.png) |
+
 ## 🚀 Características Principales
 
 - **Gestión de Proyectos y Activos**: Organiza repositorios, aplicaciones y fuentes de código por proyecto.
@@ -67,11 +71,13 @@ Contextualización → Identificación → Análisis      → Evaluación  → T
 4. **Acceso a los servicios:**
    | Servicio | URL | Credenciales por defecto |
    | :--- | :--- | :--- |
-   | Frontend | http://localhost:3000 | — |
+   | Frontend | http://localhost:3000 | `ciso@wicscan.local` / `wicscan123` |
    | Backend API Docs | http://localhost:8000/docs | — |
    | Scanner Manager | http://localhost:8001/docs | — |
    | AI Gateway | http://localhost:8002/docs | — |
    | SonarQube | http://localhost:9000 | admin / admin |
+
+   > El usuario `ciso@wicscan.local` lo crea `seed_auto` en el primer arranque (solo si la base de datos está vacía). Todavía no hay cambio de contraseña desde la UI — si vas a exponer la instancia, registra tu propio usuario desde `/register` en vez de depender del sembrado por defecto.
 
    > SonarQube tarda 1-2 minutos en arrancar la primera vez (bootstrap de Elasticsearch). `scanner-manager` genera su token de análisis automáticamente contra `admin`/`admin` la primera vez que lo necesita — cambia esa contraseña en la UI de SonarQube si expones el puerto fuera de tu máquina.
 
